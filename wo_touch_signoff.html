@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Rippel Effect — Parts Receiving</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --navy:#1F3864;
+    --navy-dark:#152845;
+    --green:#1B5E20;
+    --amber:#E65100;
+    --red:#B71C1C;
+    --bg:#F2F4F7;
+    --panel:#FFFFFF;
+    --border:#D8DEE8;
+    --text:#1A2333;
+    --text-muted:#6B7688;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg);
+    font-family:"Segoe UI",Arial,sans-serif;
+    color:var(--text);
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+    overscroll-behavior:none;
+  }
+  #app{ min-height:100vh; display:flex; flex-direction:column; }
+
+  /* ---- Header ---- */
+  header{
+    background:var(--navy);
+    color:#fff;
+    padding:18px 24px;
+    display:flex; align-items:center; justify-content:space-between;
+    flex-shrink:0;
+  }
+  header h1{ margin:0; font-size:20px; font-weight:700; letter-spacing:.3px; }
+  header .sub{ font-size:12px; color:#A8C4E0; margin-top:2px; }
+  header button.back{
+    background:rgba(255,255,255,.12); border:none; color:#fff;
+    font-size:16px; font-weight:600; padding:12px 20px; border-radius:8px;
+    cursor:pointer;
+  }
+
+  main{ flex:1; padding:20px; overflow-y:auto; }
+
+  /* ---- WO list ---- */
+  .wo-card{
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; padding:18px 20px; margin-bottom:14px;
+    display:flex; align-items:center; justify-content:space-between;
+    cursor:pointer; transition:box-shadow .15s, transform .1s;
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+  }
+  .wo-card:active{ transform:scale(.98); box-shadow:none; }
+  .wo-card .left{ display:flex; flex-direction:column; gap:4px; }
+  .wo-number{ font-size:17px; font-weight:700; color:var(--navy); }
+  .wo-assembly{ font-size:14px; color:var(--text-muted); }
+  .wo-badge{
+    background:var(--green); color:#fff; font-size:12px; font-weight:700;
+    padding:6px 12px; border-radius:20px; white-space:nowrap;
+  }
+  .empty-state{
+    text-align:center; margin-top:60px; color:var(--text-muted);
+  }
+  .empty-state .icon{ font-size:44px; margin-bottom:12px; }
+  .empty-state .title{ font-size:17px; font-weight:600; color:var(--text); }
+
+  /* ---- Line items ---- */
+  .lines-panel{
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; overflow:hidden; margin-bottom:20px;
+  }
+  .line-row{
+    display:grid; grid-template-columns:1fr auto auto;
+    gap:14px; padding:14px 18px; border-bottom:1px solid var(--border);
+    align-items:center;
+  }
+  .line-row:last-child{ border-bottom:none; }
+  .line-row .name{ font-size:15px; font-weight:600; }
+  .line-row .code{ font-size:12px; color:var(--text-muted); }
+  .line-row .qty{
+    font-size:16px; font-weight:700; color:var(--green);
+    background:#E8F5E9; padding:6px 12px; border-radius:8px; text-align:center;
+    min-width:56px;
+  }
+
+  .section-label{
+    font-size:13px; font-weight:700; color:var(--text-muted);
+    text-transform:uppercase; letter-spacing:.6px; margin:0 0 10px 4px;
+  }
+
+  /* ---- Staff picker ---- */
+  .staff-grid{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:24px; }
+  .staff-tile{
+    flex:1; min-width:140px; background:var(--panel);
+    border:2px solid var(--border); border-radius:12px;
+    padding:22px 14px; text-align:center; cursor:pointer;
+    font-size:17px; font-weight:700; color:var(--text);
+  }
+  .staff-tile.selected{ border-color:var(--navy); background:#EAF0FA; color:var(--navy); }
+
+  /* ---- Signature ---- */
+  .sig-wrap{
+    background:var(--panel); border:2px dashed var(--border); border-radius:12px;
+    padding:10px; margin-bottom:16px;
+  }
+  canvas{
+    width:100%; height:220px; display:block; border-radius:8px;
+    background:#fff; touch-action:none;
+  }
+  .sig-hint{ text-align:center; color:var(--text-muted); font-size:13px; margin-top:6px; }
+
+  .btn-row{ display:flex; gap:12px; margin-top:8px; }
+  .btn{
+    flex:1; border:none; border-radius:10px; padding:16px;
+    font-size:16px; font-weight:700; cursor:pointer;
+  }
+  .btn-primary{ background:var(--green); color:#fff; }
+  .btn-primary:disabled{ background:#A5C9A8; cursor:not-allowed; }
+  .btn-secondary{ background:#ECEFF1; color:var(--text); }
+
+  /* ---- Success ---- */
+  .success-screen{
+    text-align:center; margin-top:60px;
+  }
+  .success-screen .check{
+    width:88px; height:88px; border-radius:50%; background:var(--green);
+    color:#fff; font-size:44px; line-height:88px; margin:0 auto 20px;
+  }
+  .success-screen h2{ margin:0 0 8px; font-size:22px; }
+  .success-screen p{ color:var(--text-muted); font-size:15px; }
+
+  .error-banner{
+    background:#FDECEA; border:1px solid var(--red); color:var(--red);
+    padding:12px 16px; border-radius:8px; font-size:14px; margin-bottom:16px;
+  }
+  .loading{ text-align:center; color:var(--text-muted); margin-top:60px; font-size:15px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ============================================================
+   CONFIG — fill in TEST credentials before use
+   ============================================================ */
+const SUPABASE_URL = "https://wtkbsvopuvtxiprjtqqx.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2Jzdm9wdXZ0eGlwcmp0cXF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1OTUzNjIsImV4cCI6MjA5NjE3MTM2Mn0.q3cRrSbgmgzaw9PzHEuXaic-3Cl-JAiAPVbZnyoY8SQ";
+
+const STAFF = ["Gerhard", "Duncan", "Devan"];
+
+/* ============================================================ */
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let state = {
+  screen: "list",      // list | detail | sign | success
+  wos: [],
+  currentWO: null,
+  currentLines: [],
+  selectedStaff: null,
+  loading: false,
+  error: null,
+};
+
+const app = document.getElementById("app");
+
+function render() {
+  if (state.screen === "list") return renderList();
+  if (state.screen === "detail") return renderDetail();
+  if (state.screen === "sign") return renderSign();
+  if (state.screen === "success") return renderSuccess();
+}
+
+function header(title, sub, showBack) {
+  return `
+    <header>
+      <div>
+        <h1>${title}</h1>
+        ${sub ? `<div class="sub">${sub}</div>` : ""}
+      </div>
+      ${showBack ? `<button class="back" onclick="goBack()">← Back</button>` : ""}
+    </header>`;
+}
+
+/* ---------------- LIST SCREEN ---------------- */
+
+async function loadWOs() {
+  state.loading = true;
+  state.error = null;
+  render();
+  const { data, error } = await supabase
+    .from("work_orders")
+    .select("wo_number, assembly_name, product, status")
+    .eq("status", "Issued")
+    .order("wo_number", { ascending: true });
+
+  state.loading = false;
+  if (error) {
+    state.error = error.message;
+  } else {
+    state.wos = data || [];
+  }
+  render();
+}
+
+function renderList() {
+  let body;
+  if (state.loading) {
+    body = `<div class="loading">Loading work orders…</div>`;
+  } else if (state.error) {
+    body = `<div class="error-banner">Couldn't load work orders: ${escapeHtml(state.error)}</div>`;
+  } else if (state.wos.length === 0) {
+    body = `
+      <div class="empty-state">
+        <div class="icon">📋</div>
+        <div class="title">Nothing awaiting receipt</div>
+        <div>Work orders will appear here once parts are issued from stores.</div>
+      </div>`;
+  } else {
+    body = state.wos.map(wo => `
+      <div class="wo-card" onclick="openWO('${escapeAttr(wo.wo_number)}')">
+        <div class="left">
+          <div class="wo-number">${escapeHtml(wo.wo_number)}</div>
+          <div class="wo-assembly">${escapeHtml(wo.assembly_name || "")}</div>
+        </div>
+        <div class="wo-badge">${escapeHtml(wo.product || "")}</div>
+      </div>
+    `).join("");
+  }
+
+  app.innerHTML = `
+    ${header("Parts Receiving", "Tap a work order to confirm receipt", false)}
+    <main>${body}</main>
+  `;
+}
+
+async function openWO(woNumber) {
+  state.loading = true;
+  state.error = null;
+  state.screen = "detail";
+  render();
+
+  const [{ data: woData, error: woErr }, { data: lineData, error: lineErr }] = await Promise.all([
+    supabase.from("work_orders").select("*").eq("wo_number", woNumber).limit(1).single(),
+    supabase.from("work_order_lines").select("*").eq("wo_number", woNumber),
+  ]);
+
+  state.loading = false;
+  if (woErr || lineErr) {
+    state.error = (woErr || lineErr).message;
+  } else {
+    state.currentWO = woData;
+    state.currentLines = lineData || [];
+  }
+  render();
+}
+
+/* ---------------- DETAIL SCREEN ---------------- */
+
+function renderDetail() {
+  if (state.loading) {
+    app.innerHTML = `${header("Loading…", null, true)}<main><div class="loading">Fetching work order…</div></main>`;
+    return;
+  }
+  if (state.error) {
+    app.innerHTML = `${header("Error", null, true)}<main><div class="error-banner">${escapeHtml(state.error)}</div></main>`;
+    return;
+  }
+
+  const wo = state.currentWO;
+  const lines = state.currentLines;
+
+  const lineRows = lines.length
+    ? lines.map(l => `
+        <div class="line-row">
+          <div>
+            <div class="name">${escapeHtml(l.item_name || "")}</div>
+            <div class="code">${escapeHtml(l.stock_code || "—")}</div>
+          </div>
+          <div class="code">Issued</div>
+          <div class="qty">${escapeHtml(String(l.qty_issued ?? "—"))}</div>
+        </div>
+      `).join("")
+    : `<div class="line-row"><div class="name">No line items found</div></div>`;
+
+  app.innerHTML = `
+    ${header(wo.wo_number, wo.assembly_name || "", true)}
+    <main>
+      <div class="section-label">Parts issued</div>
+      <div class="lines-panel">${lineRows}</div>
+      <button class="btn btn-primary" style="width:100%" onclick="goToSign()">
+        Confirm Receipt →
+      </button>
+    </main>
+  `;
+}
+
+function goToSign() {
+  state.selectedStaff = null;
+  state.screen = "sign";
+  render();
+  setTimeout(setupCanvas, 0);
+}
+
+/* ---------------- SIGN SCREEN ---------------- */
+
+function renderSign() {
+  const wo = state.currentWO;
+  app.innerHTML = `
+    ${header("Confirm Receipt", wo.wo_number, true)}
+    <main>
+      <div class="section-label">Who is receiving these parts?</div>
+      <div class="staff-grid">
+        ${STAFF.map(name => `
+          <div class="staff-tile ${state.selectedStaff === name ? "selected" : ""}"
+               onclick="selectStaff('${escapeAttr(name)}')">
+            ${escapeHtml(name)}
+          </div>
+        `).join("")}
+      </div>
+
+      <div class="section-label">Sign below</div>
+      <div class="sig-wrap">
+        <canvas id="sigCanvas"></canvas>
+      </div>
+      <div class="sig-hint">Use your finger or a stylus to sign</div>
+
+      ${state.error ? `<div class="error-banner" style="margin-top:16px">${escapeHtml(state.error)}</div>` : ""}
+
+      <div class="btn-row" style="margin-top:20px">
+        <button class="btn btn-secondary" onclick="clearSignature()">Clear</button>
+        <button class="btn btn-primary" id="submitBtn" onclick="submitSignoff()" disabled>
+          Confirm & Save
+        </button>
+      </div>
+    </main>
+  `;
+}
+
+function selectStaff(name) {
+  state.selectedStaff = name;
+  render();
+  setTimeout(setupCanvas, 0);
+  updateSubmitState();
+}
+
+let canvasCtx = null;
+let hasSignature = false;
+let drawing = false;
+
+function setupCanvas() {
+  const canvas = document.getElementById("sigCanvas");
+  if (!canvas) return;
+  const ratio = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * ratio;
+  canvas.height = rect.height * ratio;
+  canvasCtx = canvas.getContext("2d");
+  canvasCtx.scale(ratio, ratio);
+  canvasCtx.lineWidth = 2.5;
+  canvasCtx.lineCap = "round";
+  canvasCtx.strokeStyle = "#1A2333";
+  hasSignature = false;
+
+  const getPos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const point = e.touches ? e.touches[0] : e;
+    return { x: point.clientX - r.left, y: point.clientY - r.top };
+  };
+
+  const start = (e) => {
+    e.preventDefault();
+    drawing = true;
+    const p = getPos(e);
+    canvasCtx.beginPath();
+    canvasCtx.moveTo(p.x, p.y);
+  };
+  const move = (e) => {
+    if (!drawing) return;
+    e.preventDefault();
+    const p = getPos(e);
+    canvasCtx.lineTo(p.x, p.y);
+    canvasCtx.stroke();
+    hasSignature = true;
+    updateSubmitState();
+  };
+  const end = () => { drawing = false; };
+
+  canvas.addEventListener("pointerdown", start);
+  canvas.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", end);
+}
+
+function clearSignature() {
+  const canvas = document.getElementById("sigCanvas");
+  if (canvas && canvasCtx) {
+    canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  hasSignature = false;
+  updateSubmitState();
+}
+
+function updateSubmitState() {
+  const btn = document.getElementById("submitBtn");
+  if (!btn) return;
+  btn.disabled = !(state.selectedStaff && hasSignature);
+}
+
+async function submitSignoff() {
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  state.error = null;
+
+  const canvas = document.getElementById("sigCanvas");
+  const signatureData = canvas.toDataURL("image/png");
+  const wo = state.currentWO;
+
+  try {
+    const { error: signErr } = await supabase.from("wo_touch_signoffs").insert({
+      wo_number: wo.wo_number,
+      signee_name: state.selectedStaff,
+      signature_data: signatureData,
+      device_note: "Floor touchpad",
+    });
+    if (signErr) throw signErr;
+
+    const { error: updateErr } = await supabase
+      .from("work_orders")
+      .update({
+        status: "Confirmed",
+        confirmed_by: state.selectedStaff,
+        confirmed_at: new Date().toISOString(),
+      })
+      .eq("wo_number", wo.wo_number);
+    if (updateErr) throw updateErr;
+
+    state.screen = "success";
+    render();
+    setTimeout(() => {
+      state.screen = "list";
+      state.currentWO = null;
+      state.currentLines = [];
+      loadWOs();
+    }, 2500);
+
+  } catch (e) {
+    state.error = e.message || String(e);
+    render();
+    setTimeout(setupCanvas, 0);
+  }
+}
+
+/* ---------------- SUCCESS SCREEN ---------------- */
+
+function renderSuccess() {
+  const wo = state.currentWO;
+  app.innerHTML = `
+    <main>
+      <div class="success-screen">
+        <div class="check">✓</div>
+        <h2>Receipt Confirmed</h2>
+        <p>${escapeHtml(wo.wo_number)} signed by ${escapeHtml(state.selectedStaff)}</p>
+      </div>
+    </main>
+  `;
+}
+
+/* ---------------- NAV ---------------- */
+
+function goBack() {
+  if (state.screen === "sign") {
+    state.screen = "detail";
+  } else if (state.screen === "detail") {
+    state.screen = "list";
+    state.currentWO = null;
+    state.currentLines = [];
+  }
+  render();
+}
+
+/* ---------------- UTIL ---------------- */
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+function escapeAttr(str) { return escapeHtml(str).replace(/'/g, "&#39;"); }
+
+/* ---------------- INIT ---------------- */
+loadWOs();
+</script>
+</body>
+</html>
