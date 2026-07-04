@@ -156,7 +156,7 @@ const STAFF = ["Gerhard", "Duncan", "Devan"];
 
 /* ============================================================ */
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let state = {
   screen: "list",      // list | detail | sign | success
@@ -194,7 +194,7 @@ async function loadWOs() {
   state.loading = true;
   state.error = null;
   render();
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("work_orders")
     .select("wo_number, assembly_name, product, status")
     .eq("status", "Issued")
@@ -247,8 +247,8 @@ async function openWO(woNumber) {
   render();
 
   const [{ data: woData, error: woErr }, { data: lineData, error: lineErr }] = await Promise.all([
-    supabase.from("work_orders").select("*").eq("wo_number", woNumber).limit(1).single(),
-    supabase.from("work_order_lines").select("*").eq("wo_number", woNumber),
+    sb.from("work_orders").select("*").eq("wo_number", woNumber).limit(1).single(),
+    sb.from("work_order_lines").select("*").eq("wo_number", woNumber),
   ]);
 
   state.loading = false;
@@ -423,7 +423,7 @@ async function submitSignoff() {
   const wo = state.currentWO;
 
   try {
-    const { error: signErr } = await supabase.from("wo_touch_signoffs").insert({
+    const { error: signErr } = await sb.from("wo_touch_signoffs").insert({
       wo_number: wo.wo_number,
       signee_name: state.selectedStaff,
       signature_data: signatureData,
@@ -431,7 +431,7 @@ async function submitSignoff() {
     });
     if (signErr) throw signErr;
 
-    const { error: updateErr } = await supabase
+    const { error: updateErr } = await sb
       .from("work_orders")
       .update({
         status: "Confirmed",
