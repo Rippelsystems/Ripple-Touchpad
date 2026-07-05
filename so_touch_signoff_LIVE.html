@@ -136,6 +136,29 @@
     padding:12px 16px; border-radius:8px; font-size:14px; margin-bottom:16px;
   }
   .loading{ text-align:center; color:var(--text-muted); margin-top:60px; font-size:15px; }
+
+  .pin-screen{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    min-height:100vh; padding:20px;
+  }
+  .pin-screen .lock-icon{ font-size:48px; margin-bottom:8px; }
+  .pin-screen h2{ margin:0 0 4px; font-size:20px; }
+  .pin-screen p{ color:var(--text-muted); font-size:14px; margin:0 0 24px; }
+  .pin-display{ display:flex; gap:14px; margin-bottom:28px; }
+  .pin-dot{
+    width:20px; height:20px; border-radius:50%; border:2px solid var(--navy);
+    background:transparent;
+  }
+  .pin-dot.filled{ background:var(--navy); }
+  .pin-keypad{ display:grid; grid-template-columns:repeat(3, 80px); gap:14px; }
+  .pin-key{
+    width:80px; height:80px; border-radius:50%; border:1px solid var(--border);
+    background:var(--panel); font-size:24px; font-weight:700; color:var(--text);
+    cursor:pointer;
+  }
+  .pin-key:active{ background:#EAF0FA; }
+  .pin-key.wide{ font-size:13px; font-weight:600; color:var(--text-muted); }
+  .pin-error{ color:var(--red); font-size:14px; margin-top:16px; height:18px; }
 </style>
 </head>
 <body>
@@ -155,7 +178,9 @@ const STAFF = ["Gerhard", "Duncan", "Devan"];
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let state = {
-  screen: "list",      // list | detail | sign | success
+  screen: "pin",     // pin | list | detail | sign | success
+  pinInput: "",
+  pinError: "",      // list | detail | sign | success
   orders: [],
   currentSO: null,
   actionType: null,     // "receive" | "return"
@@ -167,6 +192,7 @@ let state = {
 const app = document.getElementById("app");
 
 function render() {
+  if (state.screen === "pin") return renderPin();
   if (state.screen === "list") return renderList();
   if (state.screen === "detail") return renderDetail();
   if (state.screen === "sign") return renderSign();
@@ -496,6 +522,61 @@ function renderSuccess() {
   `;
 }
 
+
+/* ---------------- PIN GATE ---------------- */
+const TOUCH_PIN = "1234";
+const PIN_SESSION_KEY = "rippel_pin_so_live";
+
+function renderPin() {
+  const dots = [0,1,2,3].map(i =>
+    `<div class="pin-dot ${i < state.pinInput.length ? 'filled' : ''}"></div>`
+  ).join("");
+  app.innerHTML = `
+    <div class="pin-screen">
+      <div class="lock-icon">🔒</div>
+      <h2>Staff Access</h2>
+      <p>Enter PIN to continue</p>
+      <div class="pin-display">${dots}</div>
+      <div class="pin-keypad">
+        ${[1,2,3,4,5,6,7,8,9].map(n => `<button class="pin-key" onclick="pinPress('${n}')">${n}</button>`).join("")}
+        <button class="pin-key wide" onclick="pinClear()">Clear</button>
+        <button class="pin-key" onclick="pinPress('0')">0</button>
+        <button class="pin-key wide" onclick="pinBackspace()">⌫</button>
+      </div>
+      <div class="pin-error">${state.pinError ? escapeHtml(state.pinError) : ""}</div>
+    </div>
+  `;
+}
+
+function pinPress(d) {
+  if (state.pinInput.length >= 4) return;
+  state.pinInput += d;
+  state.pinError = "";
+  if (state.pinInput.length === 4) {
+    if (state.pinInput === TOUCH_PIN) {
+      sessionStorage.setItem(PIN_SESSION_KEY, "1");
+      state.screen = "list";
+      loadOrders();
+      return;
+    } else {
+      state.pinError = "Incorrect PIN";
+      state.pinInput = "";
+    }
+  }
+  render();
+}
+
+function pinClear() {
+  state.pinInput = "";
+  state.pinError = "";
+  render();
+}
+
+function pinBackspace() {
+  state.pinInput = state.pinInput.slice(0, -1);
+  render();
+}
+
 /* ---------------- NAV ---------------- */
 
 function goBack() {
@@ -518,7 +599,13 @@ function escapeHtml(str) {
 function escapeAttr(str) { return escapeHtml(str).replace(/'/g, "&#39;"); }
 
 /* ---------------- INIT ---------------- */
-loadOrders();
+if (sessionStorage.getItem(PIN_SESSION_KEY) === "1") {
+  state.screen = "list";
+  loadOrders();
+} else {
+  state.screen = "pin";
+  render();
+}
 </script>
 </body>
 </html>
