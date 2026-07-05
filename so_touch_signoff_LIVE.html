@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Rippel Effect — Service Orders (LIVE)</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --navy:#1F3864;
+    --navy-dark:#152845;
+    --blue:#1565C0;
+    --green:#1B5E20;
+    --amber:#E65100;
+    --red:#B71C1C;
+    --bg:#F2F4F7;
+    --panel:#FFFFFF;
+    --border:#D8DEE8;
+    --text:#1A2333;
+    --text-muted:#6B7688;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg);
+    font-family:"Segoe UI",Arial,sans-serif;
+    color:var(--text);
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+    overscroll-behavior:none;
+  }
+  #app{ min-height:100vh; display:flex; flex-direction:column; }
+
+  header{
+    background:var(--navy);
+    color:#fff;
+    padding:18px 24px;
+    display:flex; align-items:center; justify-content:space-between;
+    flex-shrink:0;
+  }
+  header h1{ margin:0; font-size:20px; font-weight:700; letter-spacing:.3px; }
+  header .sub{ font-size:12px; color:#A8C4E0; margin-top:2px; }
+  header button.back{
+    background:rgba(255,255,255,.12); border:none; color:#fff;
+    font-size:16px; font-weight:600; padding:12px 20px; border-radius:8px;
+    cursor:pointer;
+  }
+
+  main{ flex:1; padding:20px; overflow-y:auto; }
+
+  .so-card{
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; padding:18px 20px; margin-bottom:14px;
+    display:flex; align-items:center; justify-content:space-between;
+    cursor:pointer; transition:box-shadow .15s, transform .1s;
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+    gap:14px;
+  }
+  .so-card:active{ transform:scale(.98); box-shadow:none; }
+  .so-card .left{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .so-number{ font-size:17px; font-weight:700; color:var(--navy); }
+  .so-route{ font-size:13px; color:var(--text-muted); }
+  .so-badge{
+    color:#fff; font-size:12px; font-weight:700;
+    padding:6px 12px; border-radius:20px; white-space:nowrap; flex-shrink:0;
+  }
+  .badge-receive{ background:var(--blue); }
+  .badge-return{ background:var(--amber); }
+
+  .empty-state{ text-align:center; margin-top:60px; color:var(--text-muted); }
+  .empty-state .icon{ font-size:44px; margin-bottom:12px; }
+  .empty-state .title{ font-size:17px; font-weight:600; color:var(--text); }
+
+  .lines-panel{
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; overflow:hidden; margin-bottom:20px;
+  }
+  .info-row{
+    display:flex; justify-content:space-between;
+    padding:14px 18px; border-bottom:1px solid var(--border);
+  }
+  .info-row:last-child{ border-bottom:none; }
+  .info-row .label{ font-size:13px; color:var(--text-muted); }
+  .info-row .value{ font-size:15px; font-weight:600; text-align:right; }
+
+  .action-banner{
+    border-radius:12px; padding:14px 18px; margin-bottom:16px;
+    font-size:14px; font-weight:700; color:#fff; text-align:center;
+  }
+  .action-receive{ background:var(--blue); }
+  .action-return{ background:var(--amber); }
+
+  .section-label{
+    font-size:13px; font-weight:700; color:var(--text-muted);
+    text-transform:uppercase; letter-spacing:.6px; margin:0 0 10px 4px;
+  }
+
+  .staff-grid{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:24px; }
+  .staff-tile{
+    flex:1; min-width:140px; background:var(--panel);
+    border:2px solid var(--border); border-radius:12px;
+    padding:22px 14px; text-align:center; cursor:pointer;
+    font-size:17px; font-weight:700; color:var(--text);
+  }
+  .staff-tile.selected{ border-color:var(--navy); background:#EAF0FA; color:var(--navy); }
+
+  .sig-wrap{
+    background:var(--panel); border:2px dashed var(--border); border-radius:12px;
+    padding:10px; margin-bottom:16px;
+  }
+  canvas{
+    width:100%; height:220px; display:block; border-radius:8px;
+    background:#fff; touch-action:none;
+  }
+  .sig-hint{ text-align:center; color:var(--text-muted); font-size:13px; margin-top:6px; }
+
+  .btn-row{ display:flex; gap:12px; margin-top:8px; }
+  .btn{
+    flex:1; border:none; border-radius:10px; padding:16px;
+    font-size:16px; font-weight:700; cursor:pointer;
+  }
+  .btn-primary{ background:var(--green); color:#fff; }
+  .btn-primary:disabled{ background:#A5C9A8; cursor:not-allowed; }
+  .btn-secondary{ background:#ECEFF1; color:var(--text); }
+
+  .success-screen{ text-align:center; margin-top:60px; }
+  .success-screen .check{
+    width:88px; height:88px; border-radius:50%; background:var(--green);
+    color:#fff; font-size:44px; line-height:88px; margin:0 auto 20px;
+  }
+  .success-screen h2{ margin:0 0 8px; font-size:22px; }
+  .success-screen p{ color:var(--text-muted); font-size:15px; }
+
+  .error-banner{
+    background:#FDECEA; border:1px solid var(--red); color:var(--red);
+    padding:12px 16px; border-radius:8px; font-size:14px; margin-bottom:16px;
+  }
+  .loading{ text-align:center; color:var(--text-muted); margin-top:60px; font-size:15px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ============================================================
+   CONFIG — TEST credentials
+   ============================================================ */
+const SUPABASE_URL = "https://rifargmdjzsqgkttwgoy.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJpZmFyZ21kanpzcWdrdHR3Z295Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MTMxMjIsImV4cCI6MjA5MzM4OTEyMn0.cECO_hzVVU3PwjIjiTW-FQW1urLNmVpXBh8HmK-1KSs";
+
+const STAFF = ["Gerhard", "Duncan", "Devan"];
+
+/* ============================================================ */
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let state = {
+  screen: "list",      // list | detail | sign | success
+  orders: [],
+  currentSO: null,
+  actionType: null,     // "receive" | "return"
+  selectedStaff: null,
+  loading: false,
+  error: null,
+};
+
+const app = document.getElementById("app");
+
+function render() {
+  if (state.screen === "list") return renderList();
+  if (state.screen === "detail") return renderDetail();
+  if (state.screen === "sign") return renderSign();
+  if (state.screen === "success") return renderSuccess();
+}
+
+function header(title, sub, showBack) {
+  return `
+    <header>
+      <div>
+        <h1>${title}</h1>
+        ${sub ? `<div class="sub">${sub}</div>` : ""}
+      </div>
+      ${showBack ? `<button class="back" onclick="goBack()">← Back</button>` : ""}
+    </header>`;
+}
+
+/* ---------------- LIST SCREEN ---------------- */
+
+async function loadOrders() {
+  state.loading = true;
+  state.error = null;
+  render();
+  const { data, error } = await sb
+    .from("service_orders")
+    .select("*")
+    .in("status", ["DISPATCHED", "RETURNING"])
+    .order("so_number", { ascending: true });
+
+  state.loading = false;
+  if (error) {
+    state.error = error.message;
+  } else {
+    state.orders = data || [];
+  }
+  render();
+}
+
+function actionFor(so) {
+  if (so.status === "DISPATCHED") {
+    return { type: "receive", label: "Confirm Receipt", facility: so.to_facility, badgeClass: "badge-receive" };
+  }
+  if (so.status === "RETURNING") {
+    return { type: "return", label: "Confirm Return", facility: so.from_facility, badgeClass: "badge-return" };
+  }
+  return null;
+}
+
+function renderList() {
+  let body;
+  if (state.loading) {
+    body = `<div class="loading">Loading service orders…</div>`;
+  } else if (state.error) {
+    body = `<div class="error-banner">Couldn't load service orders: ${escapeHtml(state.error)}</div>`;
+  } else if (state.orders.length === 0) {
+    body = `
+      <div class="empty-state">
+        <div class="icon">🔧</div>
+        <div class="title">Nothing awaiting sign-off</div>
+        <div>Service Orders will appear here once dispatched or returning.</div>
+      </div>`;
+  } else {
+    body = state.orders.map(so => {
+      const a = actionFor(so);
+      return `
+      <div class="so-card" onclick="openSO(${so.id})">
+        <div class="left">
+          <div class="so-number">${escapeHtml(so.so_number)}</div>
+          <div class="so-route">${escapeHtml(so.from_facility)} → ${escapeHtml(so.to_facility)}  •  ${escapeHtml(so.item_name || "")}</div>
+        </div>
+        <div class="so-badge ${a.badgeClass}">${a.label}</div>
+      </div>
+    `;}).join("");
+  }
+
+  app.innerHTML = `
+    ${header("Service Orders ⚠ LIVE", "Tap an order to confirm", false)}
+    <main>${body}</main>
+  `;
+}
+
+async function openSO(soId) {
+  const so = state.orders.find(o => o.id === soId);
+  if (!so) return;
+  state.currentSO = so;
+  state.actionType = actionFor(so).type;
+  state.screen = "detail";
+  render();
+}
+
+/* ---------------- DETAIL SCREEN ---------------- */
+
+function renderDetail() {
+  const so = state.currentSO;
+  const a = actionFor(so);
+
+  app.innerHTML = `
+    ${header(so.so_number, so.service_type || "", true)}
+    <main>
+      <div class="action-banner ${a.type === 'receive' ? 'action-receive' : 'action-return'}">
+        ${a.label} at ${escapeHtml(a.facility)}
+      </div>
+      <div class="lines-panel">
+        <div class="info-row"><div class="label">Item</div><div class="value">${escapeHtml(so.item_name || "")}</div></div>
+        <div class="info-row"><div class="label">Part No</div><div class="value">${escapeHtml(so.ibom_part_no || "—")}</div></div>
+        <div class="info-row"><div class="label">Qty</div><div class="value">${escapeHtml(String(so.qty_sent ?? ""))}</div></div>
+        <div class="info-row"><div class="label">Route</div><div class="value">${escapeHtml(so.from_facility)} → ${escapeHtml(so.to_facility)}</div></div>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="goToSign()">
+        ${a.label} →
+      </button>
+    </main>
+  `;
+}
+
+function goToSign() {
+  state.selectedStaff = null;
+  state.screen = "sign";
+  render();
+  setTimeout(setupCanvas, 0);
+}
+
+/* ---------------- SIGN SCREEN ---------------- */
+
+function renderSign() {
+  const so = state.currentSO;
+  const a = actionFor(so);
+  app.innerHTML = `
+    ${header(a.label, so.so_number, true)}
+    <main>
+      <div class="section-label">Who is confirming this?</div>
+      <div class="staff-grid">
+        ${STAFF.map(name => `
+          <div class="staff-tile ${state.selectedStaff === name ? "selected" : ""}"
+               onclick="selectStaff('${escapeAttr(name)}')">
+            ${escapeHtml(name)}
+          </div>
+        `).join("")}
+      </div>
+
+      <div class="section-label">Sign below</div>
+      <div class="sig-wrap">
+        <canvas id="sigCanvas"></canvas>
+      </div>
+      <div class="sig-hint">Use your finger or a stylus to sign</div>
+
+      ${state.error ? `<div class="error-banner" style="margin-top:16px">${escapeHtml(state.error)}</div>` : ""}
+
+      <div class="btn-row" style="margin-top:20px">
+        <button class="btn btn-secondary" onclick="clearSignature()">Clear</button>
+        <button class="btn btn-primary" id="submitBtn" onclick="submitSignoff()" disabled>
+          Confirm & Save
+        </button>
+      </div>
+    </main>
+  `;
+}
+
+function selectStaff(name) {
+  state.selectedStaff = name;
+  render();
+  setTimeout(setupCanvas, 0);
+  updateSubmitState();
+}
+
+let canvasCtx = null;
+let hasSignature = false;
+let drawing = false;
+
+function setupCanvas() {
+  const canvas = document.getElementById("sigCanvas");
+  if (!canvas) return;
+  const ratio = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * ratio;
+  canvas.height = rect.height * ratio;
+  canvasCtx = canvas.getContext("2d");
+  canvasCtx.scale(ratio, ratio);
+  canvasCtx.lineWidth = 2.5;
+  canvasCtx.lineCap = "round";
+  canvasCtx.strokeStyle = "#1A2333";
+  hasSignature = false;
+
+  const getPos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const point = e.touches ? e.touches[0] : e;
+    return { x: point.clientX - r.left, y: point.clientY - r.top };
+  };
+
+  const start = (e) => {
+    e.preventDefault();
+    drawing = true;
+    const p = getPos(e);
+    canvasCtx.beginPath();
+    canvasCtx.moveTo(p.x, p.y);
+  };
+  const move = (e) => {
+    if (!drawing) return;
+    e.preventDefault();
+    const p = getPos(e);
+    canvasCtx.lineTo(p.x, p.y);
+    canvasCtx.stroke();
+    hasSignature = true;
+    updateSubmitState();
+  };
+  const end = () => { drawing = false; };
+
+  canvas.addEventListener("pointerdown", start);
+  canvas.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", end);
+}
+
+function clearSignature() {
+  const canvas = document.getElementById("sigCanvas");
+  if (canvas && canvasCtx) {
+    canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  hasSignature = false;
+  updateSubmitState();
+}
+
+function updateSubmitState() {
+  const btn = document.getElementById("submitBtn");
+  if (!btn) return;
+  btn.disabled = !(state.selectedStaff && hasSignature);
+}
+
+async function submitSignoff() {
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  state.error = null;
+
+  const canvas = document.getElementById("sigCanvas");
+  const signatureData = canvas.toDataURL("image/png");
+  const so = state.currentSO;
+  const a = actionFor(so);
+
+  try {
+    if (a.type === "receive") {
+      const { error: evtErr } = await sb.from("service_order_events").insert({
+        so_id:          so.id,
+        event_type:     "Receive",
+        facility:       so.to_facility,
+        qty:            so.qty_sent,
+        by_user:        state.selectedStaff,
+        event_date:     new Date().toISOString(),
+        notes:          "",
+        signature_data: signatureData,
+      });
+      if (evtErr) throw evtErr;
+
+      const { error: updErr } = await sb.from("service_orders")
+        .update({ status: "RECEIVED" }).eq("id", so.id);
+      if (updErr) throw updErr;
+
+    } else {
+      const { error: evtErr } = await sb.from("service_order_events").insert({
+        so_id:          so.id,
+        event_type:     "Return Received",
+        facility:       so.from_facility,
+        qty:            so.qty_sent,
+        by_user:        state.selectedStaff,
+        event_date:     new Date().toISOString(),
+        notes:          "",
+        signature_data: signatureData,
+      });
+      if (evtErr) throw evtErr;
+
+      const { error: updErr } = await sb.from("service_orders")
+        .update({ status: "QC_PENDING" }).eq("id", so.id);
+      if (updErr) throw updErr;
+
+      // Create the Service Return QC entry — same shape as the desktop
+      // app's update_service_order_status(create_qc=True) path.
+      let itemId = null;
+      const { data: itemRows } = await sb.from("stock_items")
+        .select("id")
+        .eq("item_name", so.item_name)
+        .eq("product", so.product)
+        .limit(1);
+      if (itemRows && itemRows.length) itemId = itemRows[0].id;
+
+      const { error: qcErr } = await sb.from("po_deliveries").insert({
+        po_number:      so.so_number,
+        stock_item_id:  itemId,
+        qty_delivered:  so.qty_sent,
+        qty_passed_qc:  0,
+        qty_rejected:   0,
+        delivery_note:  `SERVICE RETURN — ${so.service_type}`,
+        received_by:    state.selectedStaff,
+        qc_status:      "Awaiting QC",
+        delivery_type:  "Service Return",
+        notes: `Service Return QC | SO: ${so.so_number} | Service: ${so.service_type} | From: ${so.to_facility} | `,
+      });
+      if (qcErr) throw qcErr;
+    }
+
+    state.screen = "success";
+    render();
+    setTimeout(() => {
+      state.screen = "list";
+      state.currentSO = null;
+      loadOrders();
+    }, 2500);
+
+  } catch (e) {
+    state.error = e.message || String(e);
+    render();
+    setTimeout(setupCanvas, 0);
+  }
+}
+
+/* ---------------- SUCCESS SCREEN ---------------- */
+
+function renderSuccess() {
+  const so = state.currentSO;
+  const a = actionFor(so);
+  app.innerHTML = `
+    <main>
+      <div class="success-screen">
+        <div class="check">✓</div>
+        <h2>${a.label} Confirmed</h2>
+        <p>${escapeHtml(so.so_number)} signed by ${escapeHtml(state.selectedStaff)}</p>
+      </div>
+    </main>
+  `;
+}
+
+/* ---------------- NAV ---------------- */
+
+function goBack() {
+  if (state.screen === "sign") {
+    state.screen = "detail";
+  } else if (state.screen === "detail") {
+    state.screen = "list";
+    state.currentSO = null;
+  }
+  render();
+}
+
+/* ---------------- UTIL ---------------- */
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+function escapeAttr(str) { return escapeHtml(str).replace(/'/g, "&#39;"); }
+
+/* ---------------- INIT ---------------- */
+loadOrders();
+</script>
+</body>
+</html>
